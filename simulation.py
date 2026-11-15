@@ -27,8 +27,14 @@ def simulate_heavy_transport(range_km: float = 800.0, gross_weight_ton: float = 
     """
     Termodinamik ve Kütle Bilançosu Hesaplaması:
     - 40 tonluk tır 800 km otoyol sürüşü için tekerlekte 1.200 kWh mekanik çekiş enerjisi talep eder.
+    - Standart Class-8 çekici + treyler boş (dara) ağırlığı: ~15,0 ton.
     """
-    traction_energy_kwh = range_km * consumption_kwh_per_km
+    tare_ton = 15.0
+    base_payload_kg = max(1000.0, (gross_weight_ton - tare_ton) * 1000.0)
+
+    # Özgül çekiş tüketimi brüt ağırlıkla ölçeklenir (40 tonda 1,5 kWh/km = 0,0375 kWh/km/ton)
+    effective_consumption = consumption_kwh_per_km * (gross_weight_ton / 40.0)
+    traction_energy_kwh = range_km * effective_consumption
 
     # 1. Enerji Yoğunlukları (Wh/kg)
     diesel_grav_wh_per_kg = 12000.0
@@ -65,6 +71,7 @@ def simulate_heavy_transport(range_km: float = 800.0, gross_weight_ton: float = 
     return {
         "range_km": range_km,
         "gross_weight_ton": gross_weight_ton,
+        "base_payload_kg": base_payload_kg,
         "traction_energy_kwh": traction_energy_kwh,
         "batt_capacity_kwh": batt_capacity_kwh,
         "lfp_weight_kg": lfp_weight_kg,
@@ -97,7 +104,9 @@ def print_simulation_report(res: dict):
     print(f"Yeşil Hidrojen Yakıt Miktarı:       {res['h2_kg_needed']:.1f} kg H2 (~80 kg)")
     print(f"700 bar Tank + PEM Yakıt Hücresi:   {res['total_h2_system_kg'] / 1000.0:.2f} Ton")
     print(f"Hidrojenin Net Ağırlık Avantajı:     +{res['weight_delta_kg'] / 1000.0:.2f} Ton daha hafif!")
-    print(f">> Sonuç: Batarya 25 tonluk net yükün beşte birini (~%{res['lfp_weight_kg']/25000*100:.0f}) yutarken; hidrojen yük kapasitesini korur.")
+    base_payload_kg = res.get("base_payload_kg", (res["gross_weight_ton"] - 15.0) * 1000.0)
+    pct_payload_lost = (res['lfp_weight_kg'] / base_payload_kg) * 100.0
+    print(f">> Sonuç: Batarya {base_payload_kg/1000:.0f} tonluk net yükün beşte birini (~%{pct_payload_lost:.0f}) yutarken; hidrojen yük kapasitesini korur.")
 
     print("\n--- 3. MÜHENDİSLİK HÜKMÜ ---")
     print("Şehir içi dağıtım ve binek araçlarda:  LİTYUM BATARYA MUTLAK KRAL.")
@@ -149,7 +158,7 @@ def plot_comparisons(res: dict, out_efficiency="wtw_efficiency_comparison.png", 
             ax.text(bar.get_x() + bar.get_width() / 2.0, yval + 0.3, f"{yval:.2f} Ton", ha="center", va="bottom", color="#FFFFFF", fontweight="bold", fontsize=12)
 
         ax.set_ylim(0, 15)
-        ax.set_title("800 km Menzil İçin Güç Kaynağı Ağırlığı (40 Ton Tır)", color="#FFFFFF", fontsize=13, fontweight="bold", pad=15)
+        ax.set_title(f"800 km Menzil İçin Güç Kaynağı Ağırlığı ({res['gross_weight_ton']:.0f} Ton Tır)", color="#FFFFFF", fontsize=13, fontweight="bold", pad=15)
         ax.set_ylabel("Sistem Ağırlığı (Ton)", color="#94A3B8", fontsize=11)
         ax.tick_params(colors="#94A3B8")
         ax.grid(True, linestyle=":", alpha=0.3, color="#64748B", axis="y")
